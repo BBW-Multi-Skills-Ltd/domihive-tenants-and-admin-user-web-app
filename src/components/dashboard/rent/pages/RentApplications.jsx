@@ -16,19 +16,18 @@ import {
   APPLICATION_STATUS_FILTER_OPTIONS,
   SORT_ORDER_OPTIONS
 } from '../components/common/tenantFilters';
-
-const ACTIVE_APPLICATION_STATUSES = [
-  'INSPECTION_SCHEDULED',
-  'INSPECTION_VERIFIED',
-  'APPLICATION_STARTED',
-  'APPLICATION_SUBMITTED',
-  'UNDER_REVIEW'
-];
+import { createTenantStats } from '../components/common/tenantStats';
+import {
+  ACTIVE_APPLICATION_STATUSES,
+  calculateApplicationsSummary
+} from '../components/common/tenantStatCalculators';
+import usePageBootstrapLoading from '../../../shared/hooks/usePageBootstrapLoading';
 
 const RentApplications = () => {
   const navigate = useNavigate();
   const { applications, updateApplication, addNotification } = useApplications();
   const { viewType, isGrid } = useUnitCardView();
+  const isPageLoading = usePageBootstrapLoading();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
   const [sortBy, setSortBy] = useState('newest');
@@ -129,45 +128,43 @@ const RentApplications = () => {
     return list;
   }, [applications, search, statusFilter, sortBy]);
 
-  const summaryStats = useMemo(
-    () => ({
-      total: applications.length,
-      pending: applications.filter((app) =>
-        ['INSPECTION_SCHEDULED', 'INSPECTION_VERIFIED', 'APPLICATION_STARTED'].includes(app.status)
-      ).length,
-      submitted: applications.filter((app) => app.status === 'APPLICATION_SUBMITTED' || app.status === 'UNDER_REVIEW').length
-    }),
-    [applications]
-  );
+  const summaryStats = useMemo(() => calculateApplicationsSummary(applications), [applications]);
 
   return (
     <UnifiedPanelPage
       title="My Applications"
       subtitle="Track inspection → application → payment → decision."
-      stats={[
+      stats={createTenantStats([
         {
           label: 'Total Applications',
           value: summaryStats.total,
           meta: `${summaryStats.total} applications`,
           icon: <FilePlus2 size={20} />,
-          iconClass: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+          tone: 'neutral'
         },
         {
           label: 'Actionable',
           value: summaryStats.pending,
           meta: `${summaryStats.pending} in progress`,
           icon: <FileClock size={20} />,
-          iconClass: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+          tone: 'warning'
         },
         {
           label: 'Submitted',
           value: summaryStats.submitted,
           meta: `${summaryStats.submitted} submitted`,
           icon: <CheckCircle2 size={20} />,
-          iconClass: 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400'
+          tone: 'success'
         }
-      ]}
+      ])}
       className="applications-page"
+      isLoading={isPageLoading}
+      loadingConfig={{
+        statsCount: 3,
+        showFilterBar: true,
+        cardCount: isGrid ? 6 : 4,
+        grid: isGrid
+      }}
       filterBar={
         <TenantPageFilterBar
           left={(

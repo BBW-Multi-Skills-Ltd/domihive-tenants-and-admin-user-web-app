@@ -17,11 +17,15 @@ import {
   LEASE_WINDOW_FILTER_OPTIONS,
   MY_PROPERTIES_STATUS_FILTER_OPTIONS
 } from '../components/common/tenantFilters';
+import { createTenantStats } from '../components/common/tenantStats';
+import { calculateMyPropertiesStats } from '../components/common/tenantStatCalculators';
+import usePageBootstrapLoading from '../../../shared/hooks/usePageBootstrapLoading';
 
 const MyProperties = () => {
   const navigate = useNavigate();
   const { properties } = useProperties();
   const { viewType, isGrid } = useUnitCardView();
+  const isPageLoading = usePageBootstrapLoading();
   const [statusFilter, setStatusFilter] = React.useState('all');
   const [leaseFilter, setLeaseFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
@@ -47,13 +51,7 @@ const MyProperties = () => {
     return list;
   }, [properties, search, statusFilter, leaseFilter]);
 
-  const stats = React.useMemo(() => {
-    const visible = visibleProperties;
-    const active = visible.filter((p) => p.tenancyStatus === 'ACTIVE').length;
-    const pending = visible.filter((p) => p.tenancyStatus === 'PENDING_MOVE_IN').length;
-    const upcomingPayments = visible.filter((p) => p.nextPayment).length;
-    return { active, pending, upcomingPayments };
-  }, [visibleProperties]);
+  const stats = React.useMemo(() => calculateMyPropertiesStats(visibleProperties), [visibleProperties]);
 
   const handleAction = (property, action) => {
     const base = `/dashboard/rent/my-properties/${property.propertyId}`;
@@ -79,29 +77,36 @@ const MyProperties = () => {
     <UnifiedPanelPage
       title="My Properties"
       subtitle="Manage active tenancies, payments, and move-in/out steps."
-      stats={[
+      isLoading={isPageLoading}
+      loadingConfig={{
+        statsCount: 3,
+        showFilterBar: true,
+        cardCount: isGrid ? 6 : 4,
+        grid: isGrid
+      }}
+      stats={createTenantStats([
         {
           label: 'Active Properties',
           value: stats.active,
           meta: `${stats.active} active`,
           icon: <Building2 size={20} />,
-          iconClass: 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400'
+          tone: 'success'
         },
         {
           label: 'Pending Move-in',
           value: stats.pending,
           meta: `${stats.pending} pending`,
           icon: <Clock3 size={20} />,
-          iconClass: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+          tone: 'warning'
         },
         {
           label: 'Upcoming Payments',
           value: stats.upcomingPayments,
           meta: `${stats.upcomingPayments} upcoming`,
           icon: <Wallet size={20} />,
-          iconClass: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
+          tone: 'info'
         }
-      ]}
+      ])}
       filterBar={
         <TenantPageFilterBar
           left={(

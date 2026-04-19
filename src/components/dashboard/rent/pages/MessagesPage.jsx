@@ -20,12 +20,16 @@ import {
   filterPropertiesByTenancyAndSearch,
   TENANCY_FILTER_OPTIONS
 } from '../components/common/tenantFilters';
+import { createTenantStats } from '../components/common/tenantStats';
+import { calculateMessageStats } from '../components/common/tenantStatCalculators';
+import usePageBootstrapLoading from '../../../shared/hooks/usePageBootstrapLoading';
 
 const MessagesPage = () => {
   const navigate = useNavigate();
   const { properties } = useProperties();
   const { threads } = useMessages();
   const { viewType, isGrid } = useUnitCardView();
+  const isPageLoading = usePageBootstrapLoading();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -37,43 +41,42 @@ const MessagesPage = () => {
     });
   }, [properties, search, statusFilter]);
 
-  const stats = useMemo(() => {
-    const open = threads.filter((t) => String(t.status || '').toUpperCase() === 'OPEN').length;
-    const resolved = threads.filter((t) => String(t.status || '').toUpperCase() === 'RESOLVED').length;
-    return {
-      totalThreads: threads.length,
-      open,
-      resolved
-    };
-  }, [threads]);
+  const stats = useMemo(() => calculateMessageStats(threads), [threads]);
 
   return (
     <UnifiedPanelPage
       title="Messages"
       subtitle="Simple support inbox."
-      stats={[
+      isLoading={isPageLoading}
+      loadingConfig={{
+        statsCount: 3,
+        showFilterBar: true,
+        cardCount: isGrid ? 6 : 4,
+        grid: isGrid
+      }}
+      stats={createTenantStats([
         {
           label: 'Total Messages',
           value: stats.totalThreads,
           meta: `${stats.totalThreads} threads`,
           icon: <MessageCircle size={20} />,
-          iconClass: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
+          tone: 'info'
         },
         {
           label: 'Open',
           value: stats.open,
           meta: `${stats.open} open`,
           icon: <LifeBuoy size={20} />,
-          iconClass: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+          tone: 'warning'
         },
         {
           label: 'Resolved',
           value: stats.resolved,
           meta: `${stats.resolved} resolved`,
           icon: <Headset size={20} />,
-          iconClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+          tone: 'success'
         }
-      ]}
+      ])}
       filterBar={(
         <TenantPageFilterBar
           left={(

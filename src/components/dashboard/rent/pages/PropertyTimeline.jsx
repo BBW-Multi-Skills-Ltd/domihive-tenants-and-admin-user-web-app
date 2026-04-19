@@ -5,6 +5,7 @@ import UnifiedPanelPage, { UnifiedPanelSection } from '../../../shared/layout/Un
 import { useProperties } from '../contexts/PropertiesContext';
 import { useApplications } from '../contexts/ApplicationsContext';
 import { INSPECTION_BOOKING_STATUSES } from '../../../shared/utils/inspectionBookings';
+import usePageBootstrapLoading from '../../../shared/hooks/usePageBootstrapLoading';
 
 const APP_STAGE_ORDER = [
   'INSPECTION_SCHEDULED',
@@ -98,6 +99,7 @@ const PropertyTimeline = () => {
   const [view, setView] = useState('month');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [showDetails, setShowDetails] = useState(true);
+  const isPageLoading = usePageBootstrapLoading();
 
   const property = useMemo(
     () => properties.find((item) => String(item.propertyId) === String(propertyId)),
@@ -377,6 +379,13 @@ const PropertyTimeline = () => {
 
   return (
     <UnifiedPanelPage
+      isLoading={isPageLoading}
+      loadingConfig={{
+        statsCount: 0,
+        showFilterBar: false,
+        cardCount: 4,
+        grid: false
+      }}
       title={
         <span className="inline-flex items-center gap-3">
           <button

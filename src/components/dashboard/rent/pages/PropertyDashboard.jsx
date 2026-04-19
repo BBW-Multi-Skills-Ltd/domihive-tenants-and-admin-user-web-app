@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Bath, BedDouble, Building2, Calendar, Clock, FileText, Ruler } from 'lucide-react';
 import { useProperties } from '../contexts/PropertiesContext';
 import PropertyCard from '../components/properties/PropertyCard';
+import { validateMoveInChecklist } from '../../../shared/utils/tenantValidation';
 
 const formatNaira = (amt) => (amt || amt === 0 ? `₦${Number(amt).toLocaleString()}` : '—');
 
@@ -38,8 +39,6 @@ const formatDateInputDDMMYYYY = (value) => {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
 };
 
-const isValidDateInputDDMMYYYY = (value) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(value || ''));
-
 const PropertyDashboard = () => {
   const { propertyId } = useParams();
   const location = useLocation();
@@ -58,6 +57,7 @@ const PropertyDashboard = () => {
       moveInDate: ''
     }
   );
+  const [moveInErrors, setMoveInErrors] = useState({});
 
   if (!property) {
     return (
@@ -82,8 +82,26 @@ const PropertyDashboard = () => {
   const baths = property.bathrooms ?? property.baths ?? '—';
   const size = property.size ?? property.sizeSqm ?? property.sqm ?? '—';
 
+  const handleMoveInFieldChange = (field, value) => {
+    setMoveInForm((prev) => ({ ...prev, [field]: value }));
+    setMoveInErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
   const handleCompleteMoveIn = () => {
-    if (!isValidDateInputDDMMYYYY(moveInForm.moveInDate)) return;
+    const validationErrors = validateMoveInChecklist({
+      keyNumber: moveInForm.keyNumber,
+      moveInDate: moveInForm.moveInDate
+    });
+    if (Object.keys(validationErrors).length > 0) {
+      setMoveInErrors(validationErrors);
+      return;
+    }
+    setMoveInErrors({});
     completeMoveInChecklist(property.propertyId, {
       keysReceived: true,
       meterReading: moveInForm.keyNumber || '000000',
@@ -143,10 +161,15 @@ const PropertyDashboard = () => {
                 <input
                   type="text"
                   value={moveInForm.keyNumber || ''}
-                  onChange={(e) => setMoveInForm((p) => ({ ...p, keyNumber: e.target.value }))}
-                  className="border border-[#e2e8f0] rounded-lg px-3 py-2 w-full bg-transparent"
+                  onChange={(e) => handleMoveInFieldChange('keyNumber', e.target.value)}
+                  className={`border rounded-lg px-3 py-2 w-full bg-transparent ${
+                    moveInErrors.keyNumber ? 'border-red-500' : 'border-[#e2e8f0]'
+                  }`}
                   placeholder="Enter key number"
                 />
+                {moveInErrors.keyNumber ? (
+                  <p className="text-xs font-medium text-red-600">{moveInErrors.keyNumber}</p>
+                ) : null}
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-medium text-[#0e1f42]">Move in date</p>
@@ -154,16 +177,18 @@ const PropertyDashboard = () => {
                   type="text"
                   value={moveInForm.moveInDate || ''}
                   onChange={(e) =>
-                    setMoveInForm((p) => ({
-                      ...p,
-                      moveInDate: formatDateInputDDMMYYYY(e.target.value)
-                    }))
+                    handleMoveInFieldChange('moveInDate', formatDateInputDDMMYYYY(e.target.value))
                   }
                   inputMode="numeric"
                   maxLength={10}
-                  className="border border-[#e2e8f0] rounded-lg px-3 py-2 w-full bg-transparent"
+                  className={`border rounded-lg px-3 py-2 w-full bg-transparent ${
+                    moveInErrors.moveInDate ? 'border-red-500' : 'border-[#e2e8f0]'
+                  }`}
                   placeholder="dd/mm/yyyy"
                 />
+                {moveInErrors.moveInDate ? (
+                  <p className="text-xs font-medium text-red-600">{moveInErrors.moveInDate}</p>
+                ) : null}
               </div>
             </div>
           </div>
@@ -339,28 +364,35 @@ const PropertyDashboard = () => {
                 Please confirm your key number
                 <input
                   value={moveInForm.keyNumber || ''}
-                  onChange={(e) => setMoveInForm((p) => ({ ...p, keyNumber: e.target.value }))}
-                  className="border border-[#e2e8f0] rounded-lg px-3 py-2 flex-1 bg-transparent"
+                  onChange={(e) => handleMoveInFieldChange('keyNumber', e.target.value)}
+                  className={`border rounded-lg px-3 py-2 flex-1 bg-transparent ${
+                    moveInErrors.keyNumber ? 'border-red-500' : 'border-[#e2e8f0]'
+                  }`}
                   placeholder="Enter key number"
                 />
               </label>
+              {moveInErrors.keyNumber ? (
+                <p className="text-xs font-medium text-red-600 sm:col-span-2">{moveInErrors.keyNumber}</p>
+              ) : null}
               <label className="flex items-center gap-2 sm:col-span-2">
                 Move in date
                 <input
                   type="text"
                   value={moveInForm.moveInDate || ''}
                   onChange={(e) =>
-                    setMoveInForm((p) => ({
-                      ...p,
-                      moveInDate: formatDateInputDDMMYYYY(e.target.value)
-                    }))
+                    handleMoveInFieldChange('moveInDate', formatDateInputDDMMYYYY(e.target.value))
                   }
                   inputMode="numeric"
                   maxLength={10}
-                  className="border border-[#e2e8f0] rounded-lg px-3 py-2 flex-1 bg-transparent"
+                  className={`border rounded-lg px-3 py-2 flex-1 bg-transparent ${
+                    moveInErrors.moveInDate ? 'border-red-500' : 'border-[#e2e8f0]'
+                  }`}
                   placeholder="dd/mm/yyyy"
                 />
               </label>
+              {moveInErrors.moveInDate ? (
+                <p className="text-xs font-medium text-red-600 sm:col-span-2">{moveInErrors.moveInDate}</p>
+              ) : null}
             </div>
           </div>
         )}

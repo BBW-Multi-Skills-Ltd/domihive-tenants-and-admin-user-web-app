@@ -6,7 +6,7 @@ import { formatDateDDMMYY } from '../../../../shared/utils/dateFormat';
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const InspectionForm = ({ propertyId, formValues, onFormChange }) => {
+const InspectionForm = ({ propertyId, formValues, onFormChange, errors = {} }) => {
   const [availableDates, setAvailableDates] = useState([]);
   const [availableTimes, setAvailableTimes] = useState([]);
   const [timesByDate, setTimesByDate] = useState({});
@@ -230,6 +230,9 @@ const InspectionForm = ({ propertyId, formValues, onFormChange }) => {
               value={inspectionDate}
               required
             />
+            {errors.inspectionDate ? (
+              <p className="mt-2 text-sm text-red-600 font-medium">{errors.inspectionDate}</p>
+            ) : null}
           </>
         )}
       </div>
@@ -287,6 +290,9 @@ const InspectionForm = ({ propertyId, formValues, onFormChange }) => {
               value={inspectionTime}
               required
             />
+            {errors.inspectionTime ? (
+              <p className="mt-2 text-sm text-red-600 font-medium">{errors.inspectionTime}</p>
+            ) : null}
           </>
         )}
         
@@ -309,7 +315,9 @@ const InspectionForm = ({ propertyId, formValues, onFormChange }) => {
           value={numberOfPeople}
           onChange={handleNumberOfPeopleChange}
           required
-          className="w-full p-3 border border-[#e2e8f0] rounded-lg focus:border-[#9f7539] focus:ring-2 focus:ring-[#9f7539]/20 transition-colors"
+          className={`w-full p-3 border rounded-lg focus:border-[#9f7539] focus:ring-2 focus:ring-[#9f7539]/20 transition-colors ${
+            errors.numberOfPeople ? 'border-red-500' : 'border-[#e2e8f0]'
+          }`}
         >
           <option value="">Select number</option>
           {Array.from({ length: Number(maxPeopleAllowed) || 3 }, (_, index) => {
@@ -325,6 +333,9 @@ const InspectionForm = ({ propertyId, formValues, onFormChange }) => {
         <p className="mt-1 text-xs text-[#64748b]">
           Maximum allowed for this property: {maxPeopleAllowed} {Number(maxPeopleAllowed) === 1 ? 'person' : 'people'}
         </p>
+        {errors.numberOfPeople ? (
+          <p className="mt-2 text-sm text-red-600 font-medium">{errors.numberOfPeople}</p>
+        ) : null}
       </div>
       
       {/* Additional Notes */}

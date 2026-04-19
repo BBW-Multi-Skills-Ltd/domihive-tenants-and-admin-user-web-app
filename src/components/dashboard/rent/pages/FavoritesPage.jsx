@@ -6,52 +6,54 @@ import PropertyGrid from '../components/browse-properties/components/PropertyGri
 import UnifiedPanelPage, { UnifiedPanelSection } from '../../../shared/layout/UnifiedPanelPage';
 import { useUnitCardView } from '../contexts/UnitCardViewContext';
 import { TenantPageEmptyState } from '../components/common/TenantPageControls';
+import { createTenantStats } from '../components/common/tenantStats';
+import { calculateFavoritesStats } from '../components/common/tenantStatCalculators';
+import usePageBootstrapLoading from '../../../shared/hooks/usePageBootstrapLoading';
 
 const FavoritesPage = () => {
   const navigate = useNavigate();
   const { favoriteProperties, toggleFavorite, isFavorite } = useProperties();
   const { viewType, isGrid } = useUnitCardView();
+  const isPageLoading = usePageBootstrapLoading();
 
   const handleFavoriteToggle = (property) => toggleFavorite(property);
 
-  const stats = useMemo(() => {
-    const total = favoriteProperties.length;
-    const available = favoriteProperties.filter((item) =>
-      ['vacant', 'available'].includes(String(item.tenantStatus || item.status || '').toLowerCase())
-    ).length;
-    const occupied = favoriteProperties.filter((item) =>
-      ['occupied', 'rented'].includes(String(item.tenantStatus || item.status || '').toLowerCase())
-    ).length;
-    return { total, available, occupied };
-  }, [favoriteProperties]);
+  const stats = useMemo(() => calculateFavoritesStats(favoriteProperties), [favoriteProperties]);
 
   return (
     <UnifiedPanelPage
       title="Favorites"
       subtitle="Saved units from your browse journey."
-      stats={[
+      isLoading={isPageLoading}
+      loadingConfig={{
+        statsCount: 3,
+        showFilterBar: false,
+        cardCount: isGrid ? 6 : 4,
+        grid: isGrid
+      }}
+      stats={createTenantStats([
         {
           label: 'Saved Units',
           value: stats.total,
           meta: `${stats.total} total`,
           icon: <Heart size={18} />,
-          iconClass: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
+          tone: 'info'
         },
         {
           label: 'Available',
           value: stats.available,
           meta: `${stats.available} ready to book`,
           icon: <CheckCircle2 size={18} />,
-          iconClass: 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400'
+          tone: 'success'
         },
         {
           label: 'Occupied',
           value: stats.occupied,
           meta: `${stats.occupied} unavailable`,
           icon: <Home size={18} />,
-          iconClass: 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400'
+          tone: 'error'
         }
-      ]}
+      ])}
     >
       {favoriteProperties.length === 0 ? (
         <UnifiedPanelSection>

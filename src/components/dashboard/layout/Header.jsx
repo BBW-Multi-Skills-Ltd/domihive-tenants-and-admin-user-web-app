@@ -8,7 +8,7 @@ import { lockBodyScroll, unlockBodyScroll } from '../../../utils/scrollLock';
 import { formatDateTimeDDMMYY } from '../../shared/utils/dateFormat';
 
 const Header = ({ toggleSidebar, isMobile }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { currentDashboard, switchDashboard } = useDashboard();
   const { notifications, unreadNotificationsCount, markNotificationRead, markAllNotificationsRead } = useJourney();
   const location = useLocation();
@@ -338,7 +338,7 @@ const Header = ({ toggleSidebar, isMobile }) => {
                     <button
                       onClick={() => {
                         setShowUserDropdown(false);
-                        navigate('/dashboard/favorites');
+                        navigate('/dashboard/rent/favorites');
                       }}
                       className="user-dropdown-item w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors"
                     >
@@ -351,6 +351,7 @@ const Header = ({ toggleSidebar, isMobile }) => {
                     <button
                       onClick={() => {
                         if (window.confirm('Are you sure you want to logout?')) {
+                          logout();
                           navigate('/login');
                         }
                       }}

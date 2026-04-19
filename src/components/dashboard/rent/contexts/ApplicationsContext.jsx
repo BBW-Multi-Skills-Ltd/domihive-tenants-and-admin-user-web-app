@@ -10,6 +10,7 @@ import {
 } from '../../../shared/utils/inspectionBookings';
 import { applyApplicationLifecycleToUnit } from '../../../shared/utils/unitLifecycle';
 import { formatDateDDMMYY, formatDateTimeDDMMYY } from '../../../shared/utils/dateFormat';
+import { tenantApiClient } from '../../../shared/services/api/tenantApiClient';
 
 const MAX_NOTIFICATIONS = 120;
 
@@ -48,17 +49,6 @@ const parseInspectionDateTime = (dateNumeric, timeRange) => {
   return date;
 };
 
-const safeReadJson = (storageKey, fallback = []) => {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : fallback;
-  } catch (_error) {
-    return fallback;
-  }
-};
-
 const sanitizeApplicationForStorage = (application) => {
   if (!application || typeof application !== 'object') return application;
   const docs = application.applicantDocs && typeof application.applicantDocs === 'object'
@@ -85,25 +75,6 @@ const sanitizeApplicationForStorage = (application) => {
 const sanitizeApplicationsForStorage = (applications) =>
   Array.isArray(applications) ? applications.map(sanitizeApplicationForStorage) : [];
 
-const safeWriteJson = (storageKey, data) => {
-  const payload = JSON.stringify(data);
-  try {
-    localStorage.setItem(storageKey, payload);
-    return true;
-  } catch (_error) {
-    try {
-      // Retry once with sanitized/pruned payload.
-      const fallbackData = Array.isArray(data)
-        ? sanitizeApplicationsForStorage(data)
-        : data;
-      localStorage.setItem(storageKey, JSON.stringify(fallbackData));
-      return true;
-    } catch (_retryError) {
-      return false;
-    }
-  }
-};
-
 export const useApplications = () => {
   const context = useContext(ApplicationsContext);
   if (!context) {
@@ -119,23 +90,85 @@ export const ApplicationsProvider = ({ children }) => {
   const notificationsStorageKey = `domihive_dashboard_notifications_${userKey}`;
   const [applications, setApplications] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [syncState, setSyncState] = useState({
+    isHydrating: true,
+    syncError: ''
+  });
 
   useEffect(() => {
-    const loaded = safeReadJson(applicationsStorageKey, []);
-    setApplications(sanitizeApplicationsForStorage(loaded));
+    let isMounted = true;
+    const hydrate = async () => {
+      const [appsResult, notificationsResult] = await Promise.all([
+        tenantApiClient.readUserCollection({
+          key: applicationsStorageKey,
+          fallback: []
+        }),
+        tenantApiClient.readUserCollection({
+          key: notificationsStorageKey,
+          fallback: []
+        })
+      ]);
+      if (!isMounted) return;
+
+      setApplications(
+        sanitizeApplicationsForStorage(Array.isArray(appsResult?.data) ? appsResult.data : [])
+      );
+      setNotifications(Array.isArray(notificationsResult?.data) ? notificationsResult.data : []);
+      setSyncState({
+        isHydrating: false,
+        syncError:
+          appsResult?.error?.message ||
+          notificationsResult?.error?.message ||
+          ''
+      });
+    };
+
+    hydrate();
+    return () => {
+      isMounted = false;
+    };
   }, [applicationsStorageKey]);
 
   useEffect(() => {
-    setNotifications(safeReadJson(notificationsStorageKey, []));
-  }, [notificationsStorageKey]);
+    if (syncState.isHydrating) return;
+    let isMounted = true;
+    const persist = async () => {
+      const result = await tenantApiClient.writeUserCollection({
+        key: applicationsStorageKey,
+        value: sanitizeApplicationsForStorage(applications),
+        retrySanitizer: sanitizeApplicationsForStorage
+      });
+      if (!isMounted || result.ok) return;
+      setSyncState((prev) => ({
+        ...prev,
+        syncError: result?.error?.message || prev.syncError
+      }));
+    };
+    persist();
+    return () => {
+      isMounted = false;
+    };
+  }, [applications, applicationsStorageKey, syncState.isHydrating]);
 
   useEffect(() => {
-    safeWriteJson(applicationsStorageKey, sanitizeApplicationsForStorage(applications));
-  }, [applications, applicationsStorageKey]);
-
-  useEffect(() => {
-    safeWriteJson(notificationsStorageKey, notifications);
-  }, [notifications, notificationsStorageKey]);
+    if (syncState.isHydrating) return;
+    let isMounted = true;
+    const persist = async () => {
+      const result = await tenantApiClient.writeUserCollection({
+        key: notificationsStorageKey,
+        value: notifications
+      });
+      if (!isMounted || result.ok) return;
+      setSyncState((prev) => ({
+        ...prev,
+        syncError: result?.error?.message || prev.syncError
+      }));
+    };
+    persist();
+    return () => {
+      isMounted = false;
+    };
+  }, [notifications, notificationsStorageKey, syncState.isHydrating]);
 
   const addNotification = useCallback((notification) => {
     const nowISO = new Date().toISOString();
@@ -499,6 +532,7 @@ export const ApplicationsProvider = ({ children }) => {
       updateApplication,
       notifications,
       unreadNotificationsCount,
+      ...syncState,
       addNotification,
       markNotificationRead,
       markAllNotificationsRead,
@@ -509,6 +543,7 @@ export const ApplicationsProvider = ({ children }) => {
       updateApplication,
       notifications,
       unreadNotificationsCount,
+      syncState,
       addNotification,
       markNotificationRead,
       markAllNotificationsRead,

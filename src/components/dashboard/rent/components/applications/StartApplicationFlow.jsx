@@ -1,5 +1,9 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../../../../context/AuthContext';
+import {
+  validateApplicationDocument,
+  validateApplicationProfile
+} from '../../../../shared/utils/tenantValidation';
 
 const INITIAL_FORM = {
   fullName: '',
@@ -29,6 +33,8 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
     governmentIdMimeType: ''
   });
   const [step, setStep] = useState(Number(application?.applicationStep || 1));
+  const [profileErrors, setProfileErrors] = useState({});
+  const [documentErrors, setDocumentErrors] = useState({});
 
   useEffect(() => {
     const profile = application?.applicantProfile || {};
@@ -45,13 +51,27 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
       governmentIdMimeType: application?.applicantDocs?.governmentIdMimeType || ''
     });
     setStep(Number(application?.applicationStep || 1));
+    setProfileErrors({});
+    setDocumentErrors({});
   }, [application?.id, user?.name, user?.email, user?.phone]);
 
   const handleFieldChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setProfileErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
   };
 
   const handleDocPick = (file) => {
+    setDocumentErrors((prev) => {
+      if (!prev.governmentIdFileName) return prev;
+      const next = { ...prev };
+      delete next.governmentIdFileName;
+      return next;
+    });
     if (!file) {
       setDocs((prev) => ({
         ...prev,
@@ -95,14 +115,23 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
     });
   };
 
-  const canContinueFromStep1 =
-    Boolean(formData.fullName?.trim()) &&
-    Boolean(formData.email?.trim()) &&
-    Boolean(formData.phone?.trim());
+  const getInputClass = (field) =>
+    `mt-2 border rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40 ${
+      profileErrors[field] ? 'border-red-500' : 'border-gray-200'
+    }`;
 
-  const canContinueFromStep2 = Boolean(docs.governmentIdFileName);
+  const renderFieldError = (field) =>
+    profileErrors[field] ? (
+      <span className="mt-1 text-xs font-medium text-red-600">{profileErrors[field]}</span>
+    ) : null;
 
   const handleProceed = () => {
+    const validationErrors = validateApplicationDocument(docs);
+    if (Object.keys(validationErrors).length > 0) {
+      setDocumentErrors(validationErrors);
+      return;
+    }
+    setDocumentErrors({});
     persistDraft(3);
     setStep(3);
     onProceed?.(formData);
@@ -159,8 +188,9 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
                   <input
                     value={formData.fullName}
                     onChange={(e) => handleFieldChange('fullName', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('fullName')}
                   />
+                  {renderFieldError('fullName')}
                 </label>
                 <label className="flex flex-col text-sm text-[#475467]">
                   Email Address
@@ -168,8 +198,9 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
                     type="email"
                     value={formData.email}
                     onChange={(e) => handleFieldChange('email', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('email')}
                   />
+                  {renderFieldError('email')}
                 </label>
                 <label className="flex flex-col text-sm text-[#475467]">
                   Phone Number
@@ -177,8 +208,9 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
                     value={formData.phone}
                     onChange={(e) => handleFieldChange('phone', e.target.value)}
                     placeholder="+234 000 000 0000"
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('phone')}
                   />
+                  {renderFieldError('phone')}
                 </label>
               </div>
               <div className="grid md:grid-cols-3 gap-4">
@@ -189,29 +221,32 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
                     lang="en-GB"
                     value={formData.dateOfBirth}
                     onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('dateOfBirth')}
                   />
+                  {renderFieldError('dateOfBirth')}
                 </label>
                 <label className="flex flex-col text-sm text-[#475467]">
                   Sex
                   <select
                     value={formData.sex}
                     onChange={(e) => handleFieldChange('sex', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('sex')}
                   >
                     <option value="">Select</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
                   </select>
+                  {renderFieldError('sex')}
                 </label>
                 <label className="flex flex-col text-sm text-[#475467]">
                   Occupation
                   <input
                     value={formData.occupation}
                     onChange={(e) => handleFieldChange('occupation', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('occupation')}
                   />
+                  {renderFieldError('occupation')}
                 </label>
               </div>
             </section>
@@ -223,20 +258,21 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
                   <select
                     value={formData.maritalStatus}
                     onChange={(e) => handleFieldChange('maritalStatus', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('maritalStatus')}
                   >
                     <option value="">Select status</option>
                     <option value="Married">Married</option>
                     <option value="Engaged">Engaged</option>
                     <option value="Single">Single</option>
                   </select>
+                  {renderFieldError('maritalStatus')}
                 </label>
                 <label className="flex flex-col text-sm text-[#475467]">
                   Number of Occupants
                   <select
                     value={formData.occupants}
                     onChange={(e) => handleFieldChange('occupants', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('occupants')}
                   >
                     <option value="just_me">Just me</option>
                     <option value="me_and_spouse">I and my spouse</option>
@@ -248,6 +284,7 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
                     <option value="shared_with_friend">Shared with a friend</option>
                     <option value="shared_with_relatives">Shared with relatives</option>
                   </select>
+                  {renderFieldError('occupants')}
                 </label>
               </div>
             </section>
@@ -260,24 +297,27 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
                   <input
                     value={formData.emergencyName}
                     onChange={(e) => handleFieldChange('emergencyName', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('emergencyName')}
                   />
+                  {renderFieldError('emergencyName')}
                 </label>
                 <label className="flex flex-col text-sm text-[#475467]">
                   Phone Number
                   <input
                     value={formData.emergencyPhone}
                     onChange={(e) => handleFieldChange('emergencyPhone', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('emergencyPhone')}
                   />
+                  {renderFieldError('emergencyPhone')}
                 </label>
                 <label className="flex flex-col text-sm text-[#475467]">
                   Relationship
                   <input
                     value={formData.emergencyRelationship}
                     onChange={(e) => handleFieldChange('emergencyRelationship', e.target.value)}
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                    className={getInputClass('emergencyRelationship')}
                   />
+                  {renderFieldError('emergencyRelationship')}
                 </label>
               </div>
               <label className="flex flex-col text-sm text-[#475467]">
@@ -286,8 +326,9 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
                   type="email"
                   value={formData.emergencyEmail}
                   onChange={(e) => handleFieldChange('emergencyEmail', e.target.value)}
-                  className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#0e1f42]/40"
+                  className={getInputClass('emergencyEmail')}
                 />
+                {renderFieldError('emergencyEmail')}
               </label>
               <label className="flex flex-col text-sm text-[#475467]">
                 Additional notes
@@ -328,6 +369,11 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
               <p className="mt-2 text-xs text-[var(--text-muted,#667085)]">
                 {docs.governmentIdFileName || 'No file selected'}
               </p>
+              {documentErrors.governmentIdFileName ? (
+                <p className="mt-2 text-xs font-medium text-red-600">
+                  {documentErrors.governmentIdFileName}
+                </p>
+              ) : null}
 
               {docs.governmentIdFileName && (
                 <div className="mt-4 flex items-center justify-between rounded-xl border border-[var(--border-color,#e2e8f0)] bg-[var(--surface-bg,var(--card-bg,#ffffff))] px-4 py-3">
@@ -353,11 +399,16 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
           <div className="flex justify-end">
             <button
               onClick={() => {
+                const validationErrors = validateApplicationProfile(formData);
+                if (Object.keys(validationErrors).length > 0) {
+                  setProfileErrors(validationErrors);
+                  return;
+                }
+                setProfileErrors({});
                 persistDraft(2);
                 setStep(2);
               }}
-              disabled={!canContinueFromStep1}
-              className="px-6 py-3 rounded-2xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 rounded-2xl text-white font-semibold"
               style={{ backgroundColor: 'var(--accent-color, #0e1f42)' }}
             >
               Continue to Documents
@@ -378,8 +429,7 @@ const StartApplicationFlow = ({ application, onSaveDraft, onProceed, onClose }) 
             </button>
             <button
               onClick={handleProceed}
-              disabled={!canContinueFromStep2}
-              className="px-6 py-3 rounded-2xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 rounded-2xl text-white font-semibold"
               style={{ backgroundColor: 'var(--accent-color, #0e1f42)' }}
             >
               Continue to Payment

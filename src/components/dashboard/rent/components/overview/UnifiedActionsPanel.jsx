@@ -170,7 +170,7 @@ const UnifiedActionsPanel = ({
         navigate(`/dashboard/${currentDashboard}/applications`);
         break;
       case 'favorites':
-        navigate('/dashboard/favorites');
+        navigate('/dashboard/rent/favorites');
         break;
       case 'messages':
         navigate(`/dashboard/${currentDashboard}/messages`);

@@ -64,6 +64,7 @@ import AdminPaymentDetails from './components/admin/pages/AdminPaymentDetails';
 import { useApplications } from './components/dashboard/rent/contexts/ApplicationsContext';
 import { applicationStageGuards } from './components/dashboard/rent/contexts/JourneyContext';
 import { useProperties } from './components/dashboard/rent/contexts/PropertiesContext';
+import { RequireAuth, RequireGuest } from './components/shared/routing/RouteGuards';
 
 const RequireApplicationAccess = ({ mode, children }) => {
   const { applicationId } = useParams();
@@ -197,8 +198,22 @@ function App() {
         <Route path='*' element={<NotFound />} />
 
         {/* Auth pages without Header/Footer */}
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/signup"
+          element={(
+            <RequireGuest>
+              <SignupPage />
+            </RequireGuest>
+          )}
+        />
+        <Route
+          path="/login"
+          element={(
+            <RequireGuest>
+              <LoginPage />
+            </RequireGuest>
+          )}
+        />
         {/* Admin routes */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
@@ -230,11 +245,19 @@ function App() {
           <Route path="add-property" element={<AdminAddNewProperty />} />
           {/* Route for unit details */}
           <Route path="units/:unitId" element={<AdminPropertyDetails />} />
+          <Route path="*" element={<Navigate to="/admin" replace />} />
         </Route>
 
 
         {/* Dashboard routes */}
-        <Route path="/dashboard" element={<DashboardLayout />}>
+        <Route
+          path="/dashboard"
+          element={(
+            <RequireAuth>
+              <DashboardLayout />
+            </RequireAuth>
+          )}
+        >
           <Route index element={<Navigate to="rent/overview" replace />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="rent">
@@ -316,7 +339,9 @@ function App() {
             <Route path="payments/:propertyId" element={<PaymentWorkspacePage />} />
             <Route path="messages" element={<MessagesPage />} />
             <Route path="messages/new" element={<MessageComposePage />} />
+            <Route path="*" element={<Navigate to="overview" replace />} />
           </Route>
+          <Route path="*" element={<Navigate to="rent/overview" replace />} />
         </Route>
       </Routes>
     </div>

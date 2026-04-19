@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useMaintenance } from '../contexts/MaintenanceContext';
 import { useProperties } from '../contexts/PropertiesContext';
+import { validateMaintenanceRequest } from '../../../shared/utils/tenantValidation';
 
 const MAINTENANCE_DRAFT_KEY = 'domihive_maintenance_request_draft';
 
@@ -29,6 +30,7 @@ const MaintenanceRequestPage = () => {
   const [policyAgreed, setPolicyAgreed] = useState(false);
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
+  const [requestErrors, setRequestErrors] = useState({});
 
   useEffect(() => {
     try {
@@ -113,17 +115,23 @@ const MaintenanceRequestPage = () => {
     };
   }, [propertyTickets]);
 
-  const isFormValid =
-    form.propertyId &&
-    form.title &&
-    form.category &&
-    form.urgency &&
-    form.description &&
-    form.contactPhone &&
-    policyAgreed;
+  const updateFormField = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setRequestErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
 
   const handleSubmit = () => {
-    if (!isFormValid) return;
+    const validationErrors = validateMaintenanceRequest({ form, policyAgreed });
+    if (Object.keys(validationErrors).length > 0) {
+      setRequestErrors(validationErrors);
+      return;
+    }
+    setRequestErrors({});
 
     const now = new Date().toISOString();
 
@@ -228,24 +236,34 @@ const MaintenanceRequestPage = () => {
                 Issue Details
               </h3>
               <div className="grid gap-3 text-sm text-[var(--text-color,#0e1f42)]">
+                {requestErrors.propertyId ? (
+                  <p className="text-xs font-medium text-red-600">{requestErrors.propertyId}</p>
+                ) : null}
                 <div className="grid md:grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1">
                     Issue Title *
                     <input
                       value={form.title}
-                      onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                      className="border rounded-lg px-3 py-2"
-                      style={{ borderColor: 'var(--border-color,#e2e8f0)', backgroundColor: 'var(--card-bg,#fff)' }}
+                      onChange={(e) => updateFormField('title', e.target.value)}
+                      className={`border rounded-lg px-3 py-2 ${requestErrors.title ? 'border-red-500' : ''}`}
+                      style={{
+                        borderColor: requestErrors.title ? '#ef4444' : 'var(--border-color,#e2e8f0)',
+                        backgroundColor: 'var(--card-bg,#fff)'
+                      }}
                       placeholder="Short title"
                     />
+                    {requestErrors.title ? <span className="text-xs font-medium text-red-600">{requestErrors.title}</span> : null}
                   </label>
                   <label className="flex flex-col gap-1">
                     Category *
                     <select
                       value={form.category}
-                      onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
-                      className="border rounded-lg px-3 py-2"
-                      style={{ borderColor: 'var(--border-color,#e2e8f0)', backgroundColor: 'var(--card-bg,#fff)' }}
+                      onChange={(e) => updateFormField('category', e.target.value)}
+                      className={`border rounded-lg px-3 py-2 ${requestErrors.category ? 'border-red-500' : ''}`}
+                      style={{
+                        borderColor: requestErrors.category ? '#ef4444' : 'var(--border-color,#e2e8f0)',
+                        backgroundColor: 'var(--card-bg,#fff)'
+                      }}
                     >
                       <option value="">Select category</option>
                       {['Plumbing', 'Electrical', 'AC', 'Appliance', 'Structural', 'Cleaning', 'Other'].map((category) => (
@@ -254,6 +272,7 @@ const MaintenanceRequestPage = () => {
                         </option>
                       ))}
                     </select>
+                    {requestErrors.category ? <span className="text-xs font-medium text-red-600">{requestErrors.category}</span> : null}
                   </label>
                 </div>
 
@@ -262,9 +281,12 @@ const MaintenanceRequestPage = () => {
                     Urgency Level *
                     <select
                       value={form.urgency}
-                      onChange={(e) => setForm((prev) => ({ ...prev, urgency: e.target.value }))}
-                      className="border rounded-lg px-3 py-2"
-                      style={{ borderColor: 'var(--border-color,#e2e8f0)', backgroundColor: 'var(--card-bg,#fff)' }}
+                      onChange={(e) => updateFormField('urgency', e.target.value)}
+                      className={`border rounded-lg px-3 py-2 ${requestErrors.urgency ? 'border-red-500' : ''}`}
+                      style={{
+                        borderColor: requestErrors.urgency ? '#ef4444' : 'var(--border-color,#e2e8f0)',
+                        backgroundColor: 'var(--card-bg,#fff)'
+                      }}
                     >
                       <option value="">Select urgency</option>
                       <option>Low - can wait a few days</option>
@@ -272,6 +294,7 @@ const MaintenanceRequestPage = () => {
                       <option>High - within 24 hours</option>
                       <option>Emergency - immediate action</option>
                     </select>
+                    {requestErrors.urgency ? <span className="text-xs font-medium text-red-600">{requestErrors.urgency}</span> : null}
                   </label>
                   <label className="flex flex-col gap-1">
                     Preferred Repair Date (optional)
@@ -279,7 +302,7 @@ const MaintenanceRequestPage = () => {
                       type="date"
                       lang="en-GB"
                       value={form.preferredDate}
-                      onChange={(e) => setForm((prev) => ({ ...prev, preferredDate: e.target.value }))}
+                      onChange={(e) => updateFormField('preferredDate', e.target.value)}
                       className="border rounded-lg px-3 py-2"
                       style={{ borderColor: 'var(--border-color,#e2e8f0)', backgroundColor: 'var(--card-bg,#fff)' }}
                     />
@@ -290,12 +313,16 @@ const MaintenanceRequestPage = () => {
                   Detailed Description *
                   <textarea
                     value={form.description}
-                    onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                    className="border rounded-lg px-3 py-2"
-                    style={{ borderColor: 'var(--border-color,#e2e8f0)', backgroundColor: 'var(--card-bg,#fff)' }}
+                    onChange={(e) => updateFormField('description', e.target.value)}
+                    className={`border rounded-lg px-3 py-2 ${requestErrors.description ? 'border-red-500' : ''}`}
+                    style={{
+                      borderColor: requestErrors.description ? '#ef4444' : 'var(--border-color,#e2e8f0)',
+                      backgroundColor: 'var(--card-bg,#fff)'
+                    }}
                     rows={4}
                     placeholder="Describe the issue in detail"
                   />
+                  {requestErrors.description ? <span className="text-xs font-medium text-red-600">{requestErrors.description}</span> : null}
                 </label>
               </div>
             </div>
@@ -330,17 +357,21 @@ const MaintenanceRequestPage = () => {
                     Contact Phone *
                     <input
                       value={form.contactPhone}
-                      onChange={(e) => setForm((prev) => ({ ...prev, contactPhone: e.target.value }))}
-                      className="border rounded-lg px-3 py-2"
-                      style={{ borderColor: 'var(--border-color,#e2e8f0)', backgroundColor: 'var(--card-bg,#fff)' }}
+                      onChange={(e) => updateFormField('contactPhone', e.target.value)}
+                      className={`border rounded-lg px-3 py-2 ${requestErrors.contactPhone ? 'border-red-500' : ''}`}
+                      style={{
+                        borderColor: requestErrors.contactPhone ? '#ef4444' : 'var(--border-color,#e2e8f0)',
+                        backgroundColor: 'var(--card-bg,#fff)'
+                      }}
                       placeholder="+234 ..."
                     />
+                    {requestErrors.contactPhone ? <span className="text-xs font-medium text-red-600">{requestErrors.contactPhone}</span> : null}
                   </label>
                   <label className="flex flex-col gap-1">
                     Best Time to Contact (optional)
                     <select
                       value={form.contactWindow}
-                      onChange={(e) => setForm((prev) => ({ ...prev, contactWindow: e.target.value }))}
+                      onChange={(e) => updateFormField('contactWindow', e.target.value)}
                       className="border rounded-lg px-3 py-2"
                       style={{ borderColor: 'var(--border-color,#e2e8f0)', backgroundColor: 'var(--card-bg,#fff)' }}
                     >
@@ -371,7 +402,7 @@ const MaintenanceRequestPage = () => {
                     <input
                       type="checkbox"
                       checked={form.allowEntry}
-                      onChange={() => setForm((prev) => ({ ...prev, allowEntry: !prev.allowEntry }))}
+                      onChange={() => updateFormField('allowEntry', !form.allowEntry)}
                     />
                     I grant permission for maintenance staff to enter the property when I'm not home
                   </label>
@@ -379,7 +410,7 @@ const MaintenanceRequestPage = () => {
                     <input
                       type="checkbox"
                       checked={form.contactEmergency}
-                      onChange={() => setForm((prev) => ({ ...prev, contactEmergency: !prev.contactEmergency }))}
+                      onChange={() => updateFormField('contactEmergency', !form.contactEmergency)}
                     />
                     Contact me immediately for emergency repairs
                   </label>
@@ -387,10 +418,21 @@ const MaintenanceRequestPage = () => {
                     <input
                       type="checkbox"
                       checked={policyAgreed}
-                      onChange={() => setPolicyAgreed((prev) => !prev)}
+                      onChange={() => {
+                        setPolicyAgreed((prev) => !prev);
+                        setRequestErrors((prev) => {
+                          if (!prev.policyAgreed) return prev;
+                          const next = { ...prev };
+                          delete next.policyAgreed;
+                          return next;
+                        });
+                      }}
                     />
                     I have read and agree to the maintenance policy
                   </label>
+                  {requestErrors.policyAgreed ? (
+                    <p className="text-xs font-medium text-red-600">{requestErrors.policyAgreed}</p>
+                  ) : null}
                 </div>
 
                 <div className="flex justify-end gap-2 mt-2">
@@ -402,9 +444,8 @@ const MaintenanceRequestPage = () => {
                     Cancel
                   </button>
                   <button
-                    disabled={!isFormValid}
                     onClick={handleSubmit}
-                    className={`px-4 py-2 rounded-full text-sm font-semibold text-white ${!isFormValid ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    className="px-4 py-2 rounded-full text-sm font-semibold text-white"
                     style={{ backgroundColor: 'var(--accent-color,#9F7539)' }}
                   >
                     Submit Request

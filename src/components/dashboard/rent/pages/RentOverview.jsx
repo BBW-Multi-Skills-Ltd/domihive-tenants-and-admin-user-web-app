@@ -8,6 +8,8 @@ import { useMaintenance } from '../contexts/MaintenanceContext';
 import { formatDateTimeDDMMYY } from '../../../shared/utils/dateFormat';
 import { getOverviewRecentProperties, RECENT_PROPERTIES_EVENT } from '../../../shared/utils/recentProperties';
 import { formatNairaYear } from '../../../shared/utils/moneyFormat';
+import { calculateOverviewStats } from '../components/common/tenantStatCalculators';
+import usePageBootstrapLoading from '../../../shared/hooks/usePageBootstrapLoading';
 const RECENT_FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1560448204-603b3fc33ddc?w=1400&h=900&fit=crop';
 
 const statusStyles = {
@@ -26,17 +28,12 @@ const RentOverview = () => {
   const { properties } = useProperties();
   const { threads } = useMessages();
   const { tickets } = useMaintenance();
+  const isPageLoading = usePageBootstrapLoading();
 
-  const stats = useMemo(() => {
-    const activeApplications = applications.filter((item) =>
-      ['INSPECTION_SCHEDULED', 'INSPECTION_VERIFIED', 'APPLICATION_STARTED', 'APPLICATION_SUBMITTED', 'UNDER_REVIEW'].includes(item.status)
-    ).length;
-    const upcomingInspections = applications.filter((item) => item.status === 'INSPECTION_SCHEDULED').length;
-    const activeProperties = properties.filter((item) => ['ACTIVE', 'PENDING_MOVE_IN'].includes(item.tenancyStatus)).length;
-    const unreadMessages = threads.reduce((sum, thread) => sum + Number(thread.unreadCount || 0), 0);
-
-    return { activeApplications, upcomingInspections, activeProperties, unreadMessages };
-  }, [applications, properties, threads]);
+  const stats = useMemo(
+    () => calculateOverviewStats({ applications, properties, threads }),
+    [applications, properties, threads]
+  );
 
   const recentActivity = useMemo(() => {
     const appActivities = applications.map((app) => {
@@ -102,6 +99,76 @@ const RentOverview = () => {
       window.removeEventListener('focus', syncRecentlyViewed);
     };
   }, []);
+
+  if (isPageLoading) {
+    const skeletonStyle = { backgroundColor: 'rgba(148, 163, 184, 0.28)' };
+    return (
+      <div className="rent-overview-container bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen p-4 md:p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="space-y-2">
+            <div className="h-8 w-64 rounded-md animate-pulse" style={skeletonStyle}></div>
+            <div className="h-4 w-80 rounded-md animate-pulse" style={skeletonStyle}></div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={`overview-stat-skeleton-${index}`}
+                className="rounded-lg p-4 shadow border border-gray-100 dark:border-white/10"
+                style={{ backgroundColor: 'var(--card-bg,#ffffff)' }}
+              >
+                <div className="h-5 w-24 rounded-md animate-pulse mb-3" style={skeletonStyle}></div>
+                <div className="h-8 w-12 rounded-md animate-pulse mb-2" style={skeletonStyle}></div>
+                <div className="h-4 w-20 rounded-md animate-pulse" style={skeletonStyle}></div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-[3.5fr_6.5fr] items-start gap-6">
+            <div className="rounded-lg p-4 shadow border border-gray-100 dark:border-white/10" style={{ backgroundColor: 'var(--card-bg,#ffffff)' }}>
+              <div className="h-6 w-32 rounded-md animate-pulse mb-4" style={skeletonStyle}></div>
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={`overview-quick-action-skeleton-${index}`} className="h-11 rounded-lg animate-pulse" style={skeletonStyle}></div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg p-4 shadow border border-gray-100 dark:border-white/10" style={{ backgroundColor: 'var(--card-bg,#ffffff)' }}>
+              <div className="h-6 w-32 rounded-md animate-pulse mb-4" style={skeletonStyle}></div>
+              <div className="space-y-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={`overview-activity-skeleton-${index}`} className="rounded-lg border border-gray-100 dark:border-white/10 p-3">
+                    <div className="h-4 w-44 rounded-md animate-pulse mb-2" style={skeletonStyle}></div>
+                    <div className="h-3 w-60 rounded-md animate-pulse" style={skeletonStyle}></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg p-4 shadow border border-gray-100 dark:border-white/10" style={{ backgroundColor: 'var(--card-bg,#ffffff)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="h-6 w-36 rounded-md animate-pulse" style={skeletonStyle}></div>
+              <div className="h-4 w-16 rounded-md animate-pulse" style={skeletonStyle}></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={`overview-recent-skeleton-${index}`} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border-color,#e2e8f0)' }}>
+                  <div className="h-24 w-full animate-pulse" style={skeletonStyle}></div>
+                  <div className="p-3 space-y-2">
+                    <div className="h-4 w-2/3 rounded-md animate-pulse" style={skeletonStyle}></div>
+                    <div className="h-3 w-full rounded-md animate-pulse" style={skeletonStyle}></div>
+                    <div className="h-3 w-1/2 rounded-md animate-pulse" style={skeletonStyle}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rent-overview-container bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen p-4 md:p-6">

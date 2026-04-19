@@ -14,6 +14,7 @@ import {
   dedupeInspectionBookings,
   INSPECTION_BOOKING_STATUSES
 } from '../../../../shared/utils/inspectionBookings';
+import { validateBookInspection } from '../../../../shared/utils/tenantValidation';
 
 const BookInspectionPage = ({ propertyId, propertyData, onBack }) => {
   const { user } = useAuth();
@@ -21,6 +22,7 @@ const BookInspectionPage = ({ propertyId, propertyData, onBack }) => {
   const resolvedPropertyId = propertyData?.propertyId || propertyId;
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
   
   // Form state managed in parent
   const [formValues, setFormValues] = useState({
@@ -43,20 +45,23 @@ const BookInspectionPage = ({ propertyId, propertyData, onBack }) => {
       ...prev,
       [field]: value
     }));
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
   };
 
   const handleInspectionFormSubmit = () => {
-    // Validate all required fields
-    if (!formValues.inspectionDate || !formValues.inspectionTime || !formValues.numberOfPeople) {
-      alert('Please fill in all required fields');
+    const errors = validateBookInspection({ formValues, agreeTerms });
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
       return;
     }
-    
-    if (!agreeTerms) {
-      alert('Please agree to the Terms and Conditions');
-      return;
-    }
-    
+
+    setFormErrors({});
+
     const completeFormData = {
       ...formValues,
       agreeTerms,
@@ -128,6 +133,14 @@ const BookInspectionPage = ({ propertyId, propertyData, onBack }) => {
 
   const handleTermsChange = (e) => {
     setAgreeTerms(e.target.checked);
+    if (e.target.checked) {
+      setFormErrors((prev) => {
+        if (!prev.terms) return prev;
+        const next = { ...prev };
+        delete next.terms;
+        return next;
+      });
+    }
   };
 
   const handleSuccessModalClose = () => {
@@ -185,6 +198,7 @@ const BookInspectionPage = ({ propertyId, propertyData, onBack }) => {
                   propertyId={resolvedPropertyId}
                   formValues={formValues}
                   onFormChange={handleFormChange}
+                  errors={formErrors}
                 />
 
                 {/* Terms and Conditions Section */}
@@ -194,6 +208,9 @@ const BookInspectionPage = ({ propertyId, propertyData, onBack }) => {
                     checked={agreeTerms}
                     onChange={handleTermsChange}
                   />
+                  {formErrors.terms ? (
+                    <p className="mt-2 text-sm text-red-600 font-medium">{formErrors.terms}</p>
+                  ) : null}
                 </div>
 
                 {/* Form Actions */}

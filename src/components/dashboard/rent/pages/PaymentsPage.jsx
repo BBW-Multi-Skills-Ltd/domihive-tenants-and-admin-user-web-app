@@ -20,12 +20,16 @@ import {
   filterPropertiesByTenancyAndSearch,
   TENANCY_FILTER_OPTIONS
 } from '../components/common/tenantFilters';
+import { createTenantStats } from '../components/common/tenantStats';
+import { calculatePaymentsStats } from '../components/common/tenantStatCalculators';
+import usePageBootstrapLoading from '../../../shared/hooks/usePageBootstrapLoading';
 
 const PaymentsPage = () => {
   const navigate = useNavigate();
   const { rents, receipts, history } = usePayments();
   const { properties } = useProperties();
   const { viewType, isGrid } = useUnitCardView();
+  const isPageLoading = usePageBootstrapLoading();
 
   const [propertySearch, setPropertySearch] = useState('');
   const [tenancyFilter, setTenancyFilter] = useState('all');
@@ -37,45 +41,45 @@ const PaymentsPage = () => {
     });
   }, [properties, tenancyFilter, propertySearch]);
 
-  const stats = useMemo(() => {
-    const dueNow = Object.values(rents || {}).filter((rent) =>
-      ['Due', 'Overdue'].includes(String(rent?.status || ''))
-    ).length;
-    return {
-      unitsCount: properties.length,
-      dueNow,
-      receiptsCount: receipts.length,
-      historyCount: history.length
-    };
-  }, [properties.length, rents, receipts.length, history.length]);
+  const stats = useMemo(
+    () => calculatePaymentsStats({ properties, rents, receipts, history }),
+    [properties, rents, receipts, history]
+  );
 
   return (
     <UnifiedPanelPage
       title="Payments"
       subtitle="Manage payment-ready units, then open workspace to pay rent and bills."
-      stats={[
+      isLoading={isPageLoading}
+      loadingConfig={{
+        statsCount: 3,
+        showFilterBar: true,
+        cardCount: isGrid ? 6 : 4,
+        grid: isGrid
+      }}
+      stats={createTenantStats([
         {
           label: 'Units',
           value: stats.unitsCount,
           meta: `${stats.unitsCount} total`,
           icon: <Wallet size={20} />,
-          iconClass: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
+          tone: 'info'
         },
         {
           label: 'Due Now',
           value: stats.dueNow,
           meta: `${stats.dueNow} payable`,
           icon: <CreditCard size={20} />,
-          iconClass: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+          tone: 'warning'
         },
         {
           label: 'Receipts',
           value: stats.receiptsCount,
           meta: `${stats.receiptsCount} records`,
           icon: <ReceiptText size={20} />,
-          iconClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+          tone: 'success'
         }
-      ]}
+      ])}
       filterBar={
         <TenantPageFilterBar
           left={(

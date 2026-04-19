@@ -20,12 +20,16 @@ import {
   filterPropertiesByTenancyAndSearch,
   TENANCY_FILTER_OPTIONS
 } from '../components/common/tenantFilters';
+import { createTenantStats } from '../components/common/tenantStats';
+import { calculateMaintenanceStats } from '../components/common/tenantStatCalculators';
+import usePageBootstrapLoading from '../../../shared/hooks/usePageBootstrapLoading';
 
 const MaintenancePage = () => {
   const navigate = useNavigate();
   const { tickets } = useMaintenance();
   const { properties } = useProperties();
   const { viewType, isGrid } = useUnitCardView();
+  const isPageLoading = usePageBootstrapLoading();
 
   const [propertySearch, setPropertySearch] = useState('');
   const [tenancyFilter, setTenancyFilter] = useState('all');
@@ -37,48 +41,45 @@ const MaintenancePage = () => {
     });
   }, [properties, tenancyFilter, propertySearch]);
 
-  const stats = useMemo(() => {
-    const activeTickets = tickets.filter(
-      (t) => !['COMPLETED', 'CANCELLED'].includes(String(t.status || '').toUpperCase())
-    );
-    const emergencies = activeTickets.filter((t) =>
-      String(t.urgency || '').toLowerCase().includes('emergency')
-    ).length;
-
-    return {
-      propertiesCount: properties.length,
-      openRequests: activeTickets.length,
-      emergencyCount: emergencies
-    };
-  }, [properties.length, tickets]);
+  const stats = useMemo(
+    () => calculateMaintenanceStats({ properties, tickets }),
+    [properties, tickets]
+  );
 
   return (
     <UnifiedPanelPage
       title="Maintenance"
       subtitle="Raise and track maintenance requests for your units."
-      stats={[
+      isLoading={isPageLoading}
+      loadingConfig={{
+        statsCount: 3,
+        showFilterBar: true,
+        cardCount: isGrid ? 6 : 4,
+        grid: isGrid
+      }}
+      stats={createTenantStats([
         {
           label: 'Managed Units',
           value: stats.propertiesCount,
           meta: `${stats.propertiesCount} available`,
           icon: <ClipboardList size={20} />,
-          iconClass: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
+          tone: 'info'
         },
         {
           label: 'Open Requests',
           value: stats.openRequests,
           meta: `${stats.openRequests} ongoing`,
           icon: <Wrench size={20} />,
-          iconClass: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+          tone: 'warning'
         },
         {
           label: 'Emergency',
           value: stats.emergencyCount,
           meta: `${stats.emergencyCount} urgent`,
           icon: <AlertTriangle size={20} />,
-          iconClass: 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400'
+          tone: 'error'
         }
-      ]}
+      ])}
       filterBar={
         <TenantPageFilterBar
           left={(

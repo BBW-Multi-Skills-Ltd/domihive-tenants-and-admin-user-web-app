@@ -4,6 +4,7 @@ import { getUserStorageKey } from '../../../shared/utils/userStorageKey';
 import { useApplications } from './ApplicationsContext';
 import { applyMoveInLifecycleToUnit } from '../../../shared/utils/unitLifecycle';
 import { readAdminStorage, writeAdminStorage } from '../../../../context/adminPersistence';
+import { tenantApiClient } from '../../../shared/services/api/tenantApiClient';
 
 const EMPTY_PROPERTIES = [];
 
@@ -24,6 +25,8 @@ export const PropertiesProvider = ({ children }) => {
 
   const [properties, setProperties] = useState(EMPTY_PROPERTIES);
   const [favorites, setFavorites] = useState([]);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [syncError, setSyncError] = useState('');
 
   const readArrayStorage = (key) => {
     try {
@@ -50,44 +53,65 @@ export const PropertiesProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(propertiesStorageKey);
-      setProperties(raw ? JSON.parse(raw) : EMPTY_PROPERTIES);
-    } catch (_error) {
-      setProperties(EMPTY_PROPERTIES);
-    }
-  }, [propertiesStorageKey]);
+    let isMounted = true;
+    const hydrate = async () => {
+      const [propsResult, favoritesResult] = await Promise.all([
+        tenantApiClient.readUserCollection({ key: propertiesStorageKey, fallback: EMPTY_PROPERTIES }),
+        tenantApiClient.readUserCollection({ key: favoritesStorageKey, fallback: [] })
+      ]);
+      if (!isMounted) return;
+
+      const nextProperties = Array.isArray(propsResult?.data) ? propsResult.data : EMPTY_PROPERTIES;
+      const nextFavorites = Array.isArray(favoritesResult?.data)
+        ? favoritesResult.data.map((item) => String(item))
+        : [];
+
+      setProperties(nextProperties);
+      setFavorites(nextFavorites);
+      setSyncError(propsResult?.error?.message || favoritesResult?.error?.message || '');
+      setIsHydrated(true);
+    };
+
+    hydrate();
+    return () => {
+      isMounted = false;
+    };
+  }, [propertiesStorageKey, favoritesStorageKey]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(favoritesStorageKey);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setFavorites(Array.isArray(parsed) ? parsed.map((item) => String(item)) : []);
-    } catch (_error) {
-      setFavorites([]);
-    }
-  }, [favoritesStorageKey]);
+    if (!isHydrated) return;
+    let isMounted = true;
+    const persist = async () => {
+      const result = await tenantApiClient.writeUserCollection({
+        key: favoritesStorageKey,
+        value: favorites
+      });
+      if (!isMounted || result.ok) return;
+      setSyncError(result?.error?.message || 'Error saving favorites.');
+    };
+    persist();
+    return () => {
+      isMounted = false;
+    };
+  }, [favorites, favoritesStorageKey, isHydrated]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(favoritesStorageKey, JSON.stringify(favorites));
-    } catch (err) {
-      console.error('Error saving favorites', err);
-    }
-  }, [favorites, favoritesStorageKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(propertiesStorageKey, JSON.stringify(properties));
-    } catch (err) {
-      try {
-        const fallback = sanitizePropertiesForStorage(properties);
-        localStorage.setItem(propertiesStorageKey, JSON.stringify(fallback));
-      } catch (retryErr) {
-        console.error('Error saving properties', retryErr);
-      }
-    }
-  }, [properties, propertiesStorageKey]);
+    if (!isHydrated) return;
+    let isMounted = true;
+    const persist = async () => {
+      const result = await tenantApiClient.writeUserCollection({
+        key: propertiesStorageKey,
+        value: properties,
+        retrySanitizer: sanitizePropertiesForStorage
+      });
+      if (!isMounted || result.ok) return;
+      setSyncError(result?.error?.message || 'Error saving properties.');
+    };
+    persist();
+    return () => {
+      isMounted = false;
+    };
+  }, [properties, propertiesStorageKey, isHydrated]);
 
   useEffect(() => {
     const approvedApps = applications.filter((app) => app.status === 'APPROVED' && app.property);
@@ -532,6 +556,8 @@ export const PropertiesProvider = ({ children }) => {
       properties,
       favorites,
       favoriteProperties,
+      isHydrated,
+      syncError,
       updateProperty,
       completeMoveInChecklist,
       submitMoveOutNotice,
@@ -540,7 +566,7 @@ export const PropertiesProvider = ({ children }) => {
       toggleFavorite,
       isFavorite
     }),
-    [properties, favorites]
+    [properties, favorites, isHydrated, syncError]
   );
 
   return <PropertiesContext.Provider value={value}>{children}</PropertiesContext.Provider>;

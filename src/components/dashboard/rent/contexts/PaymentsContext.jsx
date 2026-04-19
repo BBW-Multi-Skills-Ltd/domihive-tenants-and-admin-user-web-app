@@ -2,6 +2,7 @@ import React, { createContext, useContext, useMemo, useState, useEffect } from '
 import { useAuth } from '../../../../context/AuthContext';
 import { getUserStorageKey } from '../../../shared/utils/userStorageKey';
 import { useProperties } from './PropertiesContext';
+import { tenantApiClient } from '../../../shared/services/api/tenantApiClient';
 
 const EMPTY_STATE = {
   rents: {},
@@ -25,23 +26,43 @@ export const PaymentsProvider = ({ children }) => {
   const paymentsStorageKey = `domihive_payments_${userKey}`;
 
   const [state, setState] = useState(EMPTY_STATE);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [syncError, setSyncError] = useState('');
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(paymentsStorageKey);
-      setState(raw ? JSON.parse(raw) : EMPTY_STATE);
-    } catch (_error) {
-      setState(EMPTY_STATE);
-    }
+    let isMounted = true;
+    const hydrate = async () => {
+      const result = await tenantApiClient.readUserCollection({
+        key: paymentsStorageKey,
+        fallback: EMPTY_STATE
+      });
+      if (!isMounted) return;
+      setState(result?.data && typeof result.data === 'object' ? result.data : EMPTY_STATE);
+      setSyncError(result?.error?.message || '');
+      setIsHydrated(true);
+    };
+    hydrate();
+    return () => {
+      isMounted = false;
+    };
   }, [paymentsStorageKey]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(paymentsStorageKey, JSON.stringify(state));
-    } catch (err) {
-      console.error('Error saving payments state', err);
-    }
-  }, [state, paymentsStorageKey]);
+    if (!isHydrated) return;
+    let isMounted = true;
+    const persist = async () => {
+      const result = await tenantApiClient.writeUserCollection({
+        key: paymentsStorageKey,
+        value: state
+      });
+      if (!isMounted || result.ok) return;
+      setSyncError(result?.error?.message || 'Error saving payments state.');
+    };
+    persist();
+    return () => {
+      isMounted = false;
+    };
+  }, [state, paymentsStorageKey, isHydrated]);
 
   useEffect(() => {
     if (!properties.length) return;
@@ -103,12 +124,14 @@ export const PaymentsProvider = ({ children }) => {
       bills: state.bills,
       receipts: state.receipts,
       history: state.history,
+      isHydrated,
+      syncError,
       addReceipt,
       addHistory,
       updateRentStatus,
       updateBillStatus
     }),
-    [state]
+    [state, isHydrated, syncError]
   );
 
   return <PaymentsContext.Provider value={value}>{children}</PaymentsContext.Provider>;

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { useAuth } from '../../../../context/AuthContext';
 import { getUserStorageKey } from '../../../shared/utils/userStorageKey';
+import { tenantApiClient } from '../../../shared/services/api/tenantApiClient';
 
 const MessagesContext = createContext();
 
@@ -15,23 +16,43 @@ export const MessagesProvider = ({ children }) => {
   const userKey = getUserStorageKey(user);
   const threadsStorageKey = `domihive_message_threads_${userKey}`;
   const [threads, setThreads] = useState([]);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [syncError, setSyncError] = useState('');
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(threadsStorageKey);
-      setThreads(raw ? JSON.parse(raw) : []);
-    } catch (_error) {
-      setThreads([]);
-    }
+    let isMounted = true;
+    const hydrate = async () => {
+      const result = await tenantApiClient.readUserCollection({
+        key: threadsStorageKey,
+        fallback: []
+      });
+      if (!isMounted) return;
+      setThreads(Array.isArray(result?.data) ? result.data : []);
+      setSyncError(result?.error?.message || '');
+      setIsHydrated(true);
+    };
+    hydrate();
+    return () => {
+      isMounted = false;
+    };
   }, [threadsStorageKey]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(threadsStorageKey, JSON.stringify(threads));
-    } catch (err) {
-      console.error('Error saving message threads', err);
-    }
-  }, [threads, threadsStorageKey]);
+    if (!isHydrated) return;
+    let isMounted = true;
+    const persist = async () => {
+      const result = await tenantApiClient.writeUserCollection({
+        key: threadsStorageKey,
+        value: threads
+      });
+      if (!isMounted || result.ok) return;
+      setSyncError(result?.error?.message || 'Error saving message threads.');
+    };
+    persist();
+    return () => {
+      isMounted = false;
+    };
+  }, [threads, threadsStorageKey, isHydrated]);
 
   const addThread = (thread) => {
     setThreads((prev) => [thread, ...prev]);
@@ -69,12 +90,14 @@ export const MessagesProvider = ({ children }) => {
   const value = useMemo(
     () => ({
       threads,
+      isHydrated,
+      syncError,
       addThread,
       addMessage,
       setStatus,
       markRead
     }),
-    [threads]
+    [threads, isHydrated, syncError]
   );
 
   return <MessagesContext.Provider value={value}>{children}</MessagesContext.Provider>;

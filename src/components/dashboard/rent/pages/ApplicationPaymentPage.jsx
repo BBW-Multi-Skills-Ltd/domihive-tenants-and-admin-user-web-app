@@ -4,6 +4,10 @@ import { useApplications } from '../contexts/ApplicationsContext';
 import ApplicationSuccessModal from '../components/applications/ApplicationSuccessModal';
 import { readAdminStorage, writeAdminStorage } from '../../../../context/adminPersistence';
 import { getPublishedUnitListings } from '../../../shared/services/adminListings';
+import {
+  validateBankTransferPayment,
+  validateCardPayment
+} from '../../../shared/utils/tenantValidation';
 const ADMIN_APPLICATION_INBOX_KEY = 'domihive_admin_applications_inbox_v1';
 
 const PAYMENT_METHODS = [
@@ -171,6 +175,7 @@ const ApplicationPaymentPage = () => {
   const [receiptFile, setReceiptFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [paymentErrors, setPaymentErrors] = useState({});
 
   if (!application) {
     return (
@@ -204,26 +209,16 @@ const ApplicationPaymentPage = () => {
   ];
   const total = breakdownLines.reduce((sum, line) => sum + line.amount, 0);
 
-  const isCardValid = () => {
-    const cardDigits = cardInfo.number.replace(/\s/g, '');
-    return (
-      cardDigits.length === 16 &&
-      cardInfo.holder.trim().length >= 3 &&
-      /^\d{2}\/\d{2}$/.test(cardInfo.expiry) &&
-      /^\d{3}$/.test(cardInfo.cvv)
-    );
-  };
-
   const handleSubmitPayment = () => {
-    if (selectedMethod === 'card' && !isCardValid()) {
-      window.alert('Please complete valid card details.');
+    const validationErrors =
+      selectedMethod === 'card'
+        ? validateCardPayment(cardInfo)
+        : validateBankTransferPayment({ receiptFile });
+    if (Object.keys(validationErrors).length > 0) {
+      setPaymentErrors(validationErrors);
       return;
     }
-
-    if (selectedMethod === 'bank' && !receiptFile) {
-      window.alert('Please upload transfer receipt before proceeding.');
-      return;
-    }
+    setPaymentErrors({});
 
     setIsProcessing(true);
 
@@ -282,7 +277,10 @@ const ApplicationPaymentPage = () => {
           {PAYMENT_METHODS.map((method) => (
             <button
               key={method.id}
-              onClick={() => setSelectedMethod(method.id)}
+              onClick={() => {
+                setSelectedMethod(method.id);
+                setPaymentErrors({});
+              }}
               className={`application-payment-method p-4 rounded-2xl border transition-all text-left hover:border-[var(--accent-color,#9F7539)] hover:shadow-md ${
                 selectedMethod === method.id ? 'active border-[#d97706] bg-[#fff7ed] shadow-lg' : 'border-[#e2e8f0] bg-white'
               }`}
@@ -347,11 +345,22 @@ const ApplicationPaymentPage = () => {
                 type="file"
                 accept=".png,.jpg,.jpeg,.pdf"
                 className="w-full text-sm text-[#475467] border border-[#d0d7df] p-2 mt-3 transition-colors rounded-lg"
-                onChange={(event) => setReceiptFile(event.target.files?.[0] || null)}
+                onChange={(event) => {
+                  setReceiptFile(event.target.files?.[0] || null);
+                  setPaymentErrors((prev) => {
+                    if (!prev.receipt) return prev;
+                    const next = { ...prev };
+                    delete next.receipt;
+                    return next;
+                  });
+                }}
               />
               <p className="text-xs text-[#6c757d]">
                 {receiptFile ? `Selected: ${receiptFile.name}` : 'Upload proof of payment after transfer.'}
               </p>
+              {paymentErrors.receipt ? (
+                <p className="text-xs font-medium text-red-600 mt-1">{paymentErrors.receipt}</p>
+              ) : null}
             </div>
           </div>
         )}
@@ -365,12 +374,23 @@ const ApplicationPaymentPage = () => {
                 <input
                   type="text"
                   value={cardInfo.number}
-                  onChange={(event) =>
-                    setCardInfo((prev) => ({ ...prev, number: formatCardNumber(event.target.value) }))
-                  }
+                  onChange={(event) => {
+                    setCardInfo((prev) => ({ ...prev, number: formatCardNumber(event.target.value) }));
+                    setPaymentErrors((prev) => {
+                      if (!prev.cardNumber) return prev;
+                      const next = { ...prev };
+                      delete next.cardNumber;
+                      return next;
+                    });
+                  }}
                   placeholder="1234 5678 9012 3456"
-                  className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#deb887]/40"
+                  className={`mt-2 border rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#deb887]/40 ${
+                    paymentErrors.cardNumber ? 'border-red-500' : 'border-gray-200'
+                  }`}
                 />
+                {paymentErrors.cardNumber ? (
+                  <span className="mt-1 text-xs font-medium text-red-600">{paymentErrors.cardNumber}</span>
+                ) : null}
               </label>
               <div className="grid md:grid-cols-3 gap-4">
                 <label className="flex flex-col text-sm text-[#475467] md:col-span-1">
@@ -378,34 +398,69 @@ const ApplicationPaymentPage = () => {
                   <input
                     type="text"
                     value={cardInfo.holder}
-                    onChange={(event) => setCardInfo((prev) => ({ ...prev, holder: event.target.value }))}
+                    onChange={(event) => {
+                      setCardInfo((prev) => ({ ...prev, holder: event.target.value }));
+                      setPaymentErrors((prev) => {
+                        if (!prev.cardHolder) return prev;
+                        const next = { ...prev };
+                        delete next.cardHolder;
+                        return next;
+                      });
+                    }}
                     placeholder="John Doe"
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#deb887]/40"
+                    className={`mt-2 border rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#deb887]/40 ${
+                      paymentErrors.cardHolder ? 'border-red-500' : 'border-gray-200'
+                    }`}
                   />
+                  {paymentErrors.cardHolder ? (
+                    <span className="mt-1 text-xs font-medium text-red-600">{paymentErrors.cardHolder}</span>
+                  ) : null}
                 </label>
                 <label className="flex flex-col text-sm text-[#475467]">
                   Expiry Date
                   <input
                     type="text"
                     value={cardInfo.expiry}
-                    onChange={(event) =>
-                      setCardInfo((prev) => ({ ...prev, expiry: formatExpiry(event.target.value) }))
-                    }
+                    onChange={(event) => {
+                      setCardInfo((prev) => ({ ...prev, expiry: formatExpiry(event.target.value) }));
+                      setPaymentErrors((prev) => {
+                        if (!prev.expiry) return prev;
+                        const next = { ...prev };
+                        delete next.expiry;
+                        return next;
+                      });
+                    }}
                     placeholder="MM/YY"
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#deb887]/40"
+                    className={`mt-2 border rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#deb887]/40 ${
+                      paymentErrors.expiry ? 'border-red-500' : 'border-gray-200'
+                    }`}
                   />
+                  {paymentErrors.expiry ? (
+                    <span className="mt-1 text-xs font-medium text-red-600">{paymentErrors.expiry}</span>
+                  ) : null}
                 </label>
                 <label className="flex flex-col text-sm text-[#475467]">
                   CVV
                   <input
                     type="text"
                     value={cardInfo.cvv}
-                    onChange={(event) =>
-                      setCardInfo((prev) => ({ ...prev, cvv: event.target.value.replace(/\D/g, '').slice(0, 3) }))
-                    }
+                    onChange={(event) => {
+                      setCardInfo((prev) => ({ ...prev, cvv: event.target.value.replace(/\D/g, '').slice(0, 3) }));
+                      setPaymentErrors((prev) => {
+                        if (!prev.cvv) return prev;
+                        const next = { ...prev };
+                        delete next.cvv;
+                        return next;
+                      });
+                    }}
                     placeholder="123"
-                    className="mt-2 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#deb887]/40"
+                    className={`mt-2 border rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#deb887]/40 ${
+                      paymentErrors.cvv ? 'border-red-500' : 'border-gray-200'
+                    }`}
                   />
+                  {paymentErrors.cvv ? (
+                    <span className="mt-1 text-xs font-medium text-red-600">{paymentErrors.cvv}</span>
+                  ) : null}
                 </label>
               </div>
             </div>
